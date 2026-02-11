@@ -14,6 +14,8 @@ const db = new sqlite3.Database("./hanout.db", (err) => {
 
 // Tables
 db.serialize(() => {
+
+  // Orders
   db.run(`
     CREATE TABLE IF NOT EXISTS orders (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,13 +32,40 @@ db.serialize(() => {
       order_id INTEGER,
       product_name TEXT,
       quantity REAL,
-      price REAL,
-      FOREIGN KEY(order_id) REFERENCES orders(id)
+      price REAL
+    )
+  `);
+
+  // Admins
+  db.run(`
+    CREATE TABLE IF NOT EXISTS admins (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      fullname TEXT,
+      password TEXT
+    )
+  `);
+
+  // Menu
+  db.run(`
+    CREATE TABLE IF NOT EXISTS menu (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT,
+      price REAL
     )
   `);
 });
 
-// Save order
+// Create default admin if none
+db.get("SELECT COUNT(*) as count FROM admins", (err, row) => {
+  if (row.count === 0) {
+    db.run("INSERT INTO admins (fullname, password) VALUES (?, ?)", [
+      "Admin Principal",
+      "1234"
+    ]);
+  }
+});
+
+// ---------------- SAVE ORDER ----------------
 app.post("/order", (req, res) => {
   const { customer, phone, total, items } = req.body;
 
@@ -54,17 +83,17 @@ app.post("/order", (req, res) => {
         "INSERT INTO order_items (order_id, product_name, quantity, price) VALUES (?, ?, ?, ?)"
       );
 
-      items.forEach((item) => {
+      items.forEach(item => {
         stmt.run(orderId, item.name, item.qty, item.price);
       });
 
       stmt.finalize();
-      res.json({ message: "Commande enregistrée avec succès!" });
+      res.json({ success: true });
     }
   );
 });
 
-// Get all orders
+// ---------------- GET ORDERS ----------------
 app.get("/orders", (req, res) => {
   db.all("SELECT * FROM orders ORDER BY created_at DESC", [], (err, rows) => {
     if (err) return res.status(500).json(err);
@@ -72,7 +101,7 @@ app.get("/orders", (req, res) => {
   });
 });
 
-// Get items for a specific order
+// ---------------- GET ORDER ITEMS ----------------
 app.get("/orders/:id/items", (req, res) => {
   db.all(
     "SELECT * FROM order_items WHERE order_id = ?",
@@ -84,6 +113,55 @@ app.get("/orders/:id/items", (req, res) => {
   );
 });
 
-// ✅ ONLINE DEPLOYMENT PORT FIX
+// ---------------- DELETE ORDER ----------------
+app.delete("/orders/:id", (req, res) => {
+  const id = req.params.id;
+
+  db.run("DELETE FROM order_items WHERE order_id = ?", [id], function (err) {
+    if (err) return res.status(500).json(err);
+
+    db.run("DELETE FROM orders WHERE id = ?", [id], function (err) {
+      if (err) return res.status(500).json(err);
+      res.json({ success: true });
+    });
+  });
+});
+
+// ---------------- ADMIN LOGIN ----------------
+app.post("/admin/login", (req, res) => {
+  const { fullname, password } = req.body;
+
+  db.get(
+    "SELECT * FROM admins WHERE fullname = ? AND password = ?",
+    [fullname, password],
+    (err, admin) => {
+      if (err || !admin) return res.status(401).json({ error: "Unauthorized" });
+      res.json({ success: true });
+    }
+  );
+});
+
+// ---------------- MENU ----------------
+app.get("/menu", (req, res) => {
+  db.all("SELECT * FROM menu", [], (err, rows) => {
+    if (err) return res.status(500).json(err);
+    res.json(rows);
+  });
+});
+
+app.post("/menu", (req, res) => {
+  const { name, price } = req.body;
+  db.run("INSERT INTO menu (name, price) VALUES (?, ?)", [name, price], () => {
+    res.json({ success: true });
+  });
+});
+
+app.delete("/menu/:id", (req, res) => {
+  db.run("DELETE FROM menu WHERE id = ?", [req.params.id], () => {
+    res.json({ success: true });
+  });
+});
+
+// ---------------- SERVER ----------------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("Server running on port " + PORT));
