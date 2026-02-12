@@ -7,11 +7,12 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
-const OWNER_KEY = process.env.OWNER_KEY || "CHANGE_THIS_MASTER_KEY";
+const OWNER_KEY = "sami-site";
+const CREATE_SHOP_KEY = "hanout-tea";
+
 const db = new sqlite3.Database("./hanout.db");
 
 db.serialize(() => {
-
   db.run(`CREATE TABLE IF NOT EXISTS admins (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     fullname TEXT,
@@ -19,14 +20,6 @@ db.serialize(() => {
     shop_name TEXT,
     shop_address TEXT,
     active INTEGER DEFAULT 1
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS menu_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    shop_id INTEGER,
-    name TEXT,
-    price REAL,
-    unit TEXT
   )`);
 
   db.run(`CREATE TABLE IF NOT EXISTS orders (
@@ -47,13 +40,39 @@ db.serialize(() => {
     price REAL
   )`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS menu_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shop_id INTEGER,
+    name TEXT,
+    price REAL,
+    unit TEXT
+  )`);
 });
 
 
-// ========== ADMIN ==========
+// OWNER PANEL
+app.get("/owner/shops/:key", (req, res) => {
+  if (req.params.key !== OWNER_KEY) return res.status(403).json({ error: "Forbidden" });
+  db.all(`SELECT * FROM admins`, [], (err, rows) => res.json(rows));
+});
+
+app.delete("/owner/delete-shop/:id/:key", (req, res) => {
+  if (req.params.key !== OWNER_KEY) return res.status(403).json({ error: "Forbidden" });
+
+  db.run(`DELETE FROM admins WHERE id=?`, [req.params.id]);
+  db.run(`DELETE FROM menu_items WHERE shop_id=?`, [req.params.id]);
+  db.run(`DELETE FROM orders WHERE shop_id=?`, [req.params.id]);
+
+  res.json({ success: true });
+});
+
+
+// CREATE SHOP
 app.post("/admin/signup", (req, res) => {
   const { fullname, password, shop_name, shop_address, secret_key } = req.body;
-  if (secret_key !== OWNER_KEY) return res.status(403).json({ error: "Invalid Key" });
+
+  if (secret_key !== CREATE_SHOP_KEY)
+    return res.status(403).json({ error: "Invalid Create Shop Key" });
 
   db.run(`INSERT INTO admins (fullname, password, shop_name, shop_address)
   VALUES (?, ?, ?, ?)`,
@@ -64,6 +83,8 @@ app.post("/admin/signup", (req, res) => {
   );
 });
 
+
+// LOGIN
 app.post("/admin/login", (req, res) => {
   const { fullname, password } = req.body;
 
@@ -76,13 +97,13 @@ app.post("/admin/login", (req, res) => {
 });
 
 
-// ========== SHOPS ==========
+// SHOPS
 app.get("/shops", (req, res) => {
   db.all(`SELECT id, shop_name, shop_address FROM admins WHERE active=1`, [], (e, r) => res.json(r));
 });
 
 
-// ========== MENU ==========
+// MENU
 app.post("/menu", (req, res) => {
   const { shop_id, name, price, unit } = req.body;
 
@@ -100,7 +121,7 @@ app.delete("/menu/:id", (req, res) => {
 });
 
 
-// ========== ORDERS ==========
+// ORDERS
 app.post("/order", (req, res) => {
   const { shop_id, customer, phone, description, total, items } = req.body;
 
@@ -119,14 +140,17 @@ app.post("/order", (req, res) => {
 });
 
 app.get("/orders/:shopId", (req, res) => {
-  db.all(`SELECT * FROM orders WHERE shop_id=? ORDER BY created_at DESC`, [req.params.shopId], (e, r) => res.json(r));
+  db.all(`SELECT * FROM orders WHERE shop_id=? ORDER BY created_at DESC`,
+    [req.params.shopId],
+    (e, r) => res.json(r));
 });
 
 app.get("/order_items/:orderId", (req, res) => {
-  db.all(`SELECT * FROM order_items WHERE order_id=?`, [req.params.orderId], (e, r) => res.json(r));
+  db.all(`SELECT * FROM order_items WHERE order_id=?`,
+    [req.params.orderId],
+    (e, r) => res.json(r));
 });
 
 
-// ========== START ==========
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server running on port " + PORT));
+app.listen(PORT, () => console.log("🔥 Server running on port " + PORT));
