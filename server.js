@@ -167,5 +167,17 @@ app.get("/shops", (req, res) => {
     res.json(rows);
   });
 });
+// ---------------- ORDER ITEMS ----------------
+app.get("/order_items/:orderId", (req, res) => {
+  db.all(
+    `SELECT * FROM order_items WHERE order_id = ?`,
+    [req.params.orderId],
+    (err, rows) => {
+      if(err) return res.status(500).json(err);
+      res.json(rows);
+    }
+  );
+});
+
 
 app.listen(process.env.PORT || 3000, () => console.log("Server running"));
