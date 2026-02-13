@@ -26,6 +26,25 @@ db.serialize(() => {
     blocked INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+  // التحقق من وجود عمود blocked في جدول admins وإضافته إذا لم يكن موجوداً
+db.all("PRAGMA table_info(admins)", [], (err, rows) => {
+  if (err) {
+    console.error("❌ خطأ في فحص جدول admins:", err);
+  } else {
+    const hasBlocked = rows.some(col => col.name === "blocked");
+    if (!hasBlocked) {
+      db.run("ALTER TABLE admins ADD COLUMN blocked INTEGER DEFAULT 0", (err) => {
+        if (err) {
+          console.error("❌ خطأ في إضافة عمود blocked:", err);
+        } else {
+          console.log("✅ تم إضافة عمود blocked إلى جدول admins");
+        }
+      });
+    } else {
+      console.log("✅ عمود blocked موجود بالفعل");
+    }
+  }
+});
 
   db.run(`CREATE TABLE IF NOT EXISTS menu_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
